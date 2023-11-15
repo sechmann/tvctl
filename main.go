@@ -3,18 +3,23 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
+	"net/url"
 
 	"github.com/huin/goupnp"
 )
 
 func main() {
 	ctx := context.Background()
-	log.Println("searching for devices")
-	find(ctx)
+	slog.Info("searching for devices")
+	if deviceURL, err := findFirstRootDevice(ctx); err != nil {
+		slog.Error("find devices", "err", err)
+	} else {
+		slog.Info("found device", "device", deviceURL.String())
+	}
 }
 
-func find(ctx context.Context) (string, error) {
+func findFirstRootDevice(ctx context.Context) (*url.URL, error) {
 	devices, err := goupnp.DiscoverDevicesCtx(ctx, "urn:schemas-upnp-org:device:MediaRenderer:1")
 	if err != nil {
 		panic(err)
@@ -22,22 +27,22 @@ func find(ctx context.Context) (string, error) {
 
 	for _, device := range devices {
 		if device.Err != nil {
-			log.Println(device.Err)
-		}
-
-		if device.Root == nil {
-			log.Println("no root")
+			slog.Warn("get device", "err", err)
 			continue
 		}
 
-		log.Println(device.Root.Device.FriendlyName)
-
-		if device.Location == nil {
-			log.Println("no location for", device.Root.Device.FriendlyName)
+		if device.Root == nil {
+			slog.Warn("device is not root device, skipping", "device", device)
+			continue
 		}
 
-		return device.Location.String(), nil
+		if device.Location == nil {
+			slog.Warn("device has no location, skipping", "device", device)
+			continue
+		}
+
+		return device.Location, nil
 	}
 
-	return "", fmt.Errorf("no tv found")
+	return nil, fmt.Errorf("no tv found")
 }
